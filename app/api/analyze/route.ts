@@ -43,7 +43,7 @@ function extractJSON(raw: string): CandidatoResult {
 function buildRichPrompt(jobDescription: string, cvText: string): string {
   return `
 Eres un PhD en Psicología Organizacional y experto en selección de talento humano. 
-Tu objetivo es realizar un análisis psicométrico y técnico de alto nivel.
+Tu objetivo es realizar un análisis psicométrico y técnico de alto nivel EXTREMADAMENTE conciso.
 
 DESCRIPCIÓN DEL CARGO:
 ${jobDescription}
@@ -90,8 +90,8 @@ async function analyzeFile(file: File, jobDescription: string): Promise<Candidat
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: [{ text: richPrompt }] }],
     generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 2000,
+      temperature: 0.1,
+      maxOutputTokens: 1000,
       responseMimeType: "application/json",
     }
   });
