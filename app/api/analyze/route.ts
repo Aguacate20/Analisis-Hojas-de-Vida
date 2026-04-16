@@ -40,25 +40,58 @@ function extractJSON(raw: string): CandidatoResult {
   }
 }
 
+function buildRichPrompt(jobDescription: string, cvText: string): string {
+  return `
+Eres un PhD en Psicología Organizacional y experto en selección de talento humano. 
+Tu objetivo es realizar un análisis psicométrico y técnico de alto nivel.
+
+DESCRIPCIÓN DEL CARGO:
+${jobDescription}
+
+CV DEL CANDIDATO:
+${cvText}
+
+TAREAS DE EVALUACIÓN:
+1. Ajuste Persona-Puesto (0-100): Evalúa la convergencia entre el perfil y el cargo.
+2. Big Five (OCEAN): Infiere los rasgos (0-100) analizando la narrativa de logros y estabilidad.
+3. Estabilidad Laboral: Analiza la retención histórica.
+4. Potencial de Crecimiento: Evalúa la curva de aprendizaje y ambición profesional.
+5. Brechas Técnicas: Identifica qué le falta para el éxito inmediato.
+
+INSTRUCCIÓN TÉCNICA: Responde ÚNICAMENTE con un objeto JSON. Sin Markdown. Sin introducciones.
+{
+  "nombre": "Nombre completo",
+  "puntuacion": 85,
+  "analisis_psicologico": "Análisis narrativo de 3-4 oraciones con rigor clínico/organizacional.",
+  "competencias_clave": ["Comp 1", "Comp 2", "Comp 3", "Comp 4", "Comp 5"],
+  "recomendacion": "Contratar",
+  "rasgos_personalidad": {
+    "apertura": 75, "responsabilidad": 80, "extraversion": 60, "amabilidad": 70, "neuroticismo": 35
+  },
+  "brechas_tecnicas": ["Brecha 1", "Brecha 2"],
+  "potencial_crecimiento": "Alto",
+  "estabilidad_laboral": "Alta"
+}
+`.trim();
+}
+
 async function analyzeFile(file: File, jobDescription: string): Promise<CandidatoResult> {
   const bytes = await file.arrayBuffer();
-  // CORRECCIÓN BUFFER: Usamos Buffer.from para evitar el error de los logs
   const text = await extractTextFromFile(Buffer.from(bytes), file.type);
 
-  // Usamos un modelo altamente estable para JSON
   const model = genAI.getGenerativeModel({
-    model: 'gemma-4-31b-it', // Cámbialo a 'gemma-4-31b-it' si ya confirmaste el ID exacto
+    model: 'gemini-1.5-flash-latest', // El más estable para JSON largo
     safetySettings,
   });
 
-  const prompt = `Actúa como PhD en Psicología Organizacional. Analiza el CV para el cargo: ${jobDescription}. 
-  CV: ${text}
-  Responde estrictamente en JSON con los campos: nombre, puntuacion (0-100), analisis_psicologico, competencias_clave (array), recomendacion, rasgos_personalidad (objeto con apertura, responsabilidad, extraversion, amabilidad, neuroticismo), brechas_tecnicas (array), potencial_crecimiento, estabilidad_laboral.`;
+  // Llamamos a nuestra función de prompt enriquecido
+  const richPrompt = buildRichPrompt(jobDescription, text);
 
   const result = await model.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: [{ role: 'user', parts: [{ text: richPrompt }] }],
     generationConfig: {
-      temperature: 0.1, // Mínima creatividad para mayor estabilidad
+      temperature: 0.3,
+      maxOutputTokens: 2000,
       responseMimeType: "application/json",
     }
   });
