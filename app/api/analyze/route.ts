@@ -89,7 +89,7 @@ async function analyzeFile(
 
   // Configurar modelo (gemini-1.5-flash: rápido, económico, soporta JSON)
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemma-4-31b-it',
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.4,
