@@ -8,7 +8,7 @@ if (!process.env.GEMMA_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMMA_API_KEY);
 
-const BATCH_SIZE = 3;
+const BATCH_SIZE = 1;
 
 function buildPrompt(jobDescription: string, cvText: string): string {
   return `
@@ -57,7 +57,8 @@ Valores permitidos:
 function extractJSON(raw: string): CandidatoResult {
   // Intentar parsear directamente
   try {
-    return JSON.parse(raw) as CandidatoResult;
+    const cleanRaw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanRaw) as CandidatoResult;
   } catch {
     // Si falla, buscar el primer objeto JSON válido en el texto
     const match = raw.match(/\{[\s\S]*\}/);
@@ -92,7 +93,7 @@ async function analyzeFile(
     model: 'gemma-4-31b-it',
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.4,
+      temperature: 0.2,
       maxOutputTokens: 1024,
     },
   });
