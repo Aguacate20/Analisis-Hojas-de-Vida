@@ -25,12 +25,23 @@ export async function POST(req: Request) {
       body: formData,
     });
 
+    // Leer como texto primero para detectar errores de HF
+    const responseText = await hfResponse.text();
+
+    // Si HF retorna HTML (cold start o error), lo detectamos
+    if (responseText.startsWith('<') || responseText.includes('Your space')) {
+      return Response.json(
+        { error: 'El servidor de análisis está iniciando. Espera 30 segundos e intenta de nuevo.' },
+        { status: 503 }
+      );
+    }
+
     if (!hfResponse.ok) {
-      const err = await hfResponse.json();
+      const err = JSON.parse(responseText);
       return Response.json({ error: err.detail || 'Error en el análisis.' }, { status: hfResponse.status });
     }
 
-    const data = await hfResponse.json();
+    const data = JSON.parse(responseText);
     return Response.json(data.results);
 
   } catch (error) {
