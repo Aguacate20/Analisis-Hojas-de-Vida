@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import type { CandidatoResult } from '../../types';
+import type { CandidatoResult } from '../types';
 
 const COLORS = {
   primary: [30, 41, 59] as [number, number, number],       // slate-800
