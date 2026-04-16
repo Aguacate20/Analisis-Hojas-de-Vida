@@ -106,7 +106,7 @@ async function analyzeFile(file: File, jobDescription: string): Promise<Candidat
     contents: [{ role: 'user', parts: [{ text: richPrompt }] }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 600,
       responseMimeType: "application/json",
     }
   });
