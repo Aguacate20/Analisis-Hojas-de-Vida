@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { extractTextFromFile, isSupportedType } from '../../../lib/extractors';
-import type { CandidatoResult } from '../../../../types';
+import type { CandidatoResult } from '../../../types';
 
 if (!process.env.GEMMA_API_KEY) {
   throw new Error('La variable de entorno GEMMA_API_KEY no está configurada.');
