@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { extractTextFromFile, isSupportedType } from '../../../lib/extractors';
 import type { CandidatoResult } from '../../../types';
 
@@ -8,106 +8,63 @@ if (!process.env.GEMMA_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMMA_API_KEY);
 
+// Ajuste para Vercel Hobby (10s limit): Procesamos de 1 en 1
 const BATCH_SIZE = 1;
 
-function buildPrompt(jobDescription: string, cvText: string): string {
-  return `
-Eres un PhD en Psicología Organizacional y experto en selección de talento humano.
-Analiza el siguiente CV en relación con la descripción del cargo.
-
-DESCRIPCIÓN DEL CARGO:
-${jobDescription}
-
-CV DEL CANDIDATO:
-${cvText}
-
-Realiza un análisis profundo y evalúa:
-1. Ajuste Persona-Puesto (0-100): qué tan bien encaja el perfil con el cargo.
-2. Rasgos de personalidad Big Five inferidos del lenguaje y experiencia (valores 0-100 cada uno).
-3. Estabilidad laboral basada en duración promedio en cada empresa.
-4. Potencial de crecimiento basado en trayectoria y logros.
-5. Brechas técnicas específicas frente al cargo.
-
-INSTRUCCIÓN CRÍTICA: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional antes ni después, sin bloques de código markdown. El JSON debe seguir exactamente esta estructura:
-{
-  "nombre": "Nombre completo del candidato (extráelo del CV)",
-  "puntuacion": 85,
-  "analisis_psicologico": "Análisis narrativo de 3-4 oraciones sobre el perfil psicológico, motivaciones y fit cultural.",
-  "competencias_clave": ["Competencia 1", "Competencia 2", "Competencia 3", "Competencia 4", "Competencia 5"],
-  "recomendacion": "Contratar",
-  "rasgos_personalidad": {
-    "apertura": 75,
-    "responsabilidad": 80,
-    "extraversion": 60,
-    "amabilidad": 70,
-    "neuroticismo": 35
-  },
-  "brechas_tecnicas": ["Brecha 1", "Brecha 2"],
-  "potencial_crecimiento": "Alto",
-  "estabilidad_laboral": "Alta"
-}
-
-Valores permitidos:
-- recomendacion: "Contratar" | "Entrevistar" | "Descartar"
-- potencial_crecimiento: "Alto" | "Medio" | "Bajo"
-- estabilidad_laboral: "Alta" | "Media" | "Baja"
-`.trim();
-}
+// Configuración de seguridad para evitar que la IA bloquee CVs por error
+const safetySettings = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
 
 function extractJSON(raw: string): CandidatoResult {
-  // Intentar parsear directamente
   try {
+    // 1. Limpieza agresiva de Markdown y espacios
     const cleanRaw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanRaw) as CandidatoResult;
-  } catch {
-    // Si falla, buscar el primer objeto JSON válido en el texto
+  } catch (e) {
+    // 2. Intento de búsqueda por expresiones regulares si lo anterior falla
     const match = raw.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new Error('La IA no devolvió un JSON válido en su respuesta.');
+    if (match) {
+      try {
+        return JSON.parse(match[0]) as CandidatoResult;
+      } catch (innerError) {
+        console.error("Respuesta fallida de la IA:", raw);
+        throw new Error("El formato del análisis no es procesable.");
+      }
     }
-    try {
-      return JSON.parse(match[0]) as CandidatoResult;
-    } catch {
-      throw new Error('No se pudo parsear el JSON extraído de la respuesta.');
-    }
+    console.error("Respuesta sin JSON:", raw);
+    throw new Error("La IA no generó un reporte estructurado.");
   }
 }
 
-async function analyzeFile(
-  file: File,
-  jobDescription: string
-): Promise<CandidatoResult> {
-  // Validar tipo de archivo
-  if (!isSupportedType(file.type)) {
-    throw new Error(
-      `Tipo de archivo no soportado: "${file.name}". Solo se aceptan PDF y Word (.docx).`
-    );
-  }
-
-  // Extraer texto
+async function analyzeFile(file: File, jobDescription: string): Promise<CandidatoResult> {
   const bytes = await file.arrayBuffer();
+  // CORRECCIÓN BUFFER: Usamos Buffer.from para evitar el error de los logs
   const text = await extractTextFromFile(Buffer.from(bytes), file.type);
 
-  // Configurar modelo (gemini-1.5-flash: rápido, económico, soporta JSON)
+  // Usamos un modelo altamente estable para JSON
   const model = genAI.getGenerativeModel({
-    model: 'gemma-4-31b-it',
-    generationConfig: {
-      responseMimeType: 'application/json',
-      temperature: 0.2,
-      maxOutputTokens: 1024,
-    },
+    model: 'gemini-1.5-flash', // Cámbialo a 'gemma-4-31b-it' si ya confirmaste el ID exacto
+    safetySettings,
   });
 
-  const result = await model.generateContent(buildPrompt(jobDescription, text));
+  const prompt = `Actúa como PhD en Psicología Organizacional. Analiza el CV para el cargo: ${jobDescription}. 
+  CV: ${text}
+  Responde estrictamente en JSON con los campos: nombre, puntuacion (0-100), analisis_psicologico, competencias_clave (array), recomendacion, rasgos_personalidad (objeto con apertura, responsabilidad, extraversion, amabilidad, neuroticismo), brechas_tecnicas (array), potencial_crecimiento, estabilidad_laboral.`;
+
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0.1, // Mínima creatividad para mayor estabilidad
+      responseMimeType: "application/json",
+    }
+  });
+
   const raw = result.response.text();
-  const parsed = extractJSON(raw);
-
-  // Garantizar que el nombre tenga un fallback si Gemini no lo encontró
-  if (!parsed.nombre || parsed.nombre.trim() === '') {
-    parsed.nombre = file.name.replace(/\.[^/.]+$/, '');
-  }
-
-  return parsed;
+  return extractJSON(raw);
 }
 
 async function processBatches(
