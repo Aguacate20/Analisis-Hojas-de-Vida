@@ -80,7 +80,7 @@ async function analyzeFile(file: File, jobDescription: string): Promise<Candidat
   const text = await extractTextFromFile(Buffer.from(bytes), file.type);
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash-latest', // El más estable para JSON largo
+    model: 'gemini-2.5-flash', // El más estable para JSON largo
     safetySettings,
   });
 
