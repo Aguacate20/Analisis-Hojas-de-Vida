@@ -20,23 +20,48 @@ const safetySettings = [
 ];
 
 function extractJSON(raw: string): CandidatoResult {
+  // Con responseMimeType: "application/json", la respuesta YA es JSON puro
+  // Solo limpiamos por si acaso hay markdown residual
+  const cleanRaw = raw
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  // Intentar parse directo primero
   try {
-    // 1. Limpieza agresiva de Markdown y espacios
-    const cleanRaw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanRaw) as CandidatoResult;
-  } catch (e) {
-    // 2. Intento de búsqueda por expresiones regulares si lo anterior falla
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as CandidatoResult;
-      } catch (innerError) {
-        console.error("Respuesta fallida de la IA:", raw);
-        throw new Error("El formato del análisis no es procesable.");
+  } catch (e1) {
+    // Buscar el primer objeto JSON completo y balanceado
+    const start = cleanRaw.indexOf('{');
+    if (start === -1) {
+      console.error("Sin JSON en respuesta:", cleanRaw.substring(0, 200));
+      throw new Error("La IA no generó un reporte estructurado.");
+    }
+
+    // Buscar el cierre balanceado del JSON
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < cleanRaw.length; i++) {
+      if (cleanRaw[i] === '{') depth++;
+      else if (cleanRaw[i] === '}') {
+        depth--;
+        if (depth === 0) { end = i; break; }
       }
     }
-    console.error("Respuesta sin JSON:", raw);
-    throw new Error("La IA no generó un reporte estructurado.");
+
+    if (end === -1) {
+      // JSON truncado — aumentar maxOutputTokens
+      console.error("JSON truncado (sin cierre). Raw:", cleanRaw.substring(0, 300));
+      throw new Error("La respuesta fue truncada. Intenta con un CV más corto.");
+    }
+
+    try {
+      return JSON.parse(cleanRaw.substring(start, end + 1)) as CandidatoResult;
+    } catch (e2) {
+      console.error("JSON malformado:", cleanRaw.substring(start, end + 1).substring(0, 300));
+      throw new Error("El formato del análisis no es procesable.");
+    }
   }
 }
 
@@ -91,7 +116,7 @@ async function analyzeFile(file: File, jobDescription: string): Promise<Candidat
     contents: [{ role: 'user', parts: [{ text: richPrompt }] }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 1000,
+      maxOutputTokens: 2000,
       responseMimeType: "application/json",
     }
   });
