@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { extractTextFromFile } from "@/lib/extractors";
+import { extractTextFromFile } from "../../lib/extractors";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMMA_API_KEY!);
 
