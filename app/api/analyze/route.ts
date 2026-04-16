@@ -47,7 +47,7 @@ async function analyzeFile(file: File, jobDescription: string): Promise<Candidat
 
   // Usamos un modelo altamente estable para JSON
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash', // Cámbialo a 'gemma-4-31b-it' si ya confirmaste el ID exacto
+    model: 'gemma-4-31b-it', // Cámbialo a 'gemma-4-31b-it' si ya confirmaste el ID exacto
     safetySettings,
   });
 
