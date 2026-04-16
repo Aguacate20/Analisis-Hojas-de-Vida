@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FileText, Upload, Loader2, Download } from 'lucide-react';
-import { generateProfessionalPDF } from '@/lib/reportGenerator';
+import { generateProfessionalPDF } from '../lib/reportGenerator';
 
 export default function SendaHome() {
   const [jobDescription, setJobDescription] = useState('');
